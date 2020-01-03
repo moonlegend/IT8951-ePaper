@@ -51,7 +51,6 @@ static void EPD_IT8951_Reset(void)
     DEV_Delay_ms(200);
 }
 
-
 /******************************************************************************
 function :	Wait until the busy_pin goes HIGH
 parameter:
@@ -64,7 +63,6 @@ static void EPD_IT8951_ReadBusy(void)
         Busy_State = DEV_Digital_Read(EPD_BUSY_PIN);
     }
 }
-
 
 /******************************************************************************
 function :	write command
@@ -90,7 +88,6 @@ static void EPD_IT8951_WriteCommand(UWORD Command)
 	DEV_Digital_Write(EPD_CS_PIN, HIGH);
 }
 
-
 /******************************************************************************
 function :	write data
 parameter:  data
@@ -114,7 +111,6 @@ static void EPD_IT8951_WriteData(UWORD Data)
 
     DEV_Digital_Write(EPD_CS_PIN, HIGH);
 }
-
 
 /******************************************************************************
 function :	write multi data
@@ -141,8 +137,6 @@ static void EPD_IT8951_WriteMuitiData(UWORD* Data_Buf, UDOUBLE Length)
     }
     DEV_Digital_Write(EPD_CS_PIN, HIGH);
 }
-
-
 
 /******************************************************************************
 function :	read data
@@ -177,9 +171,6 @@ static UWORD EPD_IT8951_ReadData()
     return ReadData;
 }
 
-
-
-
 /******************************************************************************
 function :	read multi data
 parameter:  data
@@ -213,8 +204,6 @@ static void EPD_IT8951_ReadMultiData(UWORD* Data_Buf, UDOUBLE Length)
     DEV_Digital_Write(EPD_CS_PIN, HIGH);
 }
 
-
-
 /******************************************************************************
 function:	write multi arg
 parameter:	data
@@ -234,7 +223,6 @@ static void EPD_IT8951_WriteMultiArg(UWORD Arg_Cmd, UWORD* Arg_Buf, UWORD Arg_Nu
      }
 }
 
-
 /******************************************************************************
 function :	Cmd4 ReadReg
 parameter:  
@@ -248,8 +236,6 @@ static UWORD EPD_IT8951_ReadReg(UWORD Reg_Address)
     return Reg_Value;
 }
 
-
-
 /******************************************************************************
 function :	Cmd5 WriteReg
 parameter:  
@@ -260,8 +246,6 @@ static void EPD_IT8951_WriteReg(UWORD Reg_Address,UWORD Reg_Value)
     EPD_IT8951_WriteData(Reg_Address);
     EPD_IT8951_WriteData(Reg_Value);
 }
-
-
 
 /******************************************************************************
 function :	get VCOM
@@ -276,8 +260,6 @@ static UWORD EPD_IT8951_GetVCOM(void)
     return VCOM;
 }
 
-
-
 /******************************************************************************
 function :	set VCOM
 parameter:  
@@ -288,8 +270,6 @@ static void EPD_IT8951_SetVCOM(UWORD VCOM)
     EPD_IT8951_WriteData(0x0001);
     EPD_IT8951_WriteData(VCOM);
 }
-
-
 
 /******************************************************************************
 function :	Cmd10 LD_IMG
@@ -306,7 +286,6 @@ static void EPD_IT8951_LoadImgStart( IT8951_Load_Img_Info* Load_Img_Info )
     EPD_IT8951_WriteCommand(IT8951_TCON_LD_IMG);
     EPD_IT8951_WriteData(Args);
 }
-
 
 /******************************************************************************
 function :	Cmd11 LD_IMG_Area
@@ -336,7 +315,6 @@ static void EPD_IT8951_LoadImgEnd(void)
     EPD_IT8951_WriteCommand(IT8951_TCON_LD_IMG_END);
 }
 
-
 /******************************************************************************
 function :	EPD_IT8951_Get_System_Info
 parameter:  
@@ -356,7 +334,6 @@ static void EPD_IT8951_GetSystemInfo(void* Buf)
 	Debug("LUT Version = %s\r\n", (UBYTE*)Dev_Info->LUT_Version);
 }
 
-
 /******************************************************************************
 function :	EPD_IT8951_Set_Target_Memory_Addr
 parameter:  
@@ -369,7 +346,6 @@ static void EPD_IT8951_SetTargetMemoryAddr(UDOUBLE Target_Memory_Addr)
     EPD_IT8951_WriteReg(LISAR+2, WordH);
     EPD_IT8951_WriteReg(LISAR  , WordL);
 }
-
 
 /******************************************************************************
 function :	EPD_IT8951_WaitForDisplayReady
@@ -384,9 +360,42 @@ static void EPD_IT8951_WaitForDisplayReady(void)
     }
 }
 
+/******************************************************************************
+function :	EPD_IT8951_HostAreaPackedPixelWrite
+parameter:  
+******************************************************************************/
+static void EPD_IT8951_HostAreaPackedPixelWrite(UBYTE bp, IT8951_Load_Img_Info*Load_Img_Info, IT8951_Area_Img_Info*Area_Img_Info, bool Packed_Write)
+{
+    UWORD Source_Buffer_Width, Source_Buffer_Height;
+    UWORD Source_Buffer_Length;
 
+    UWORD* Source_Buffer = (UWORD*)Load_Img_Info->Source_Buffer_Addr;
+    EPD_IT8951_SetTargetMemoryAddr(Load_Img_Info->Target_Memory_Addr);
+    EPD_IT8951_LoadImgAreaStart(Load_Img_Info,Area_Img_Info);
 
+    //from byte to word
+    Source_Buffer_Width = bp == 1 ?  Area_Img_Info->Area_W / 2 : (Area_Img_Info->Area_W*bp/8)/2;
+    Source_Buffer_Height = Area_Img_Info->Area_H;
+    Source_Buffer_Length = Source_Buffer_Width * Source_Buffer_Height;
 
+    if(Packed_Write == true && bp != 8)
+    {
+        EPD_IT8951_WriteMuitiData(Source_Buffer, Source_Buffer_Length);
+    }
+    else
+    {
+        for(UDOUBLE i=0; i<Source_Buffer_Height; i++)
+        {
+            for(UDOUBLE j=0; j<Source_Buffer_Width; j++)
+            {
+                EPD_IT8951_WriteData(*Source_Buffer);
+                Source_Buffer++;
+            }
+        }
+    }
+
+    EPD_IT8951_LoadImgEnd();
+}
 
 /******************************************************************************
 function :	EPD_IT8951_HostAreaPackedPixelWrite_1bp
@@ -394,41 +403,8 @@ parameter:
 ******************************************************************************/
 static void EPD_IT8951_HostAreaPackedPixelWrite_1bp(IT8951_Load_Img_Info*Load_Img_Info,IT8951_Area_Img_Info*Area_Img_Info, bool Packed_Write)
 {
-    UWORD Source_Buffer_Width, Source_Buffer_Height;
-    UWORD Source_Buffer_Length;
-
-    UWORD* Source_Buffer = (UWORD*)Load_Img_Info->Source_Buffer_Addr;
-    EPD_IT8951_SetTargetMemoryAddr(Load_Img_Info->Target_Memory_Addr);
-    EPD_IT8951_LoadImgAreaStart(Load_Img_Info,Area_Img_Info);
-
-    //from byte to word
-    //use 8bp to display 1bp, so here, divide by 2, because every byte has full bit.
-    Source_Buffer_Width = Area_Img_Info->Area_W/2;
-    Source_Buffer_Height = Area_Img_Info->Area_H;
-    Source_Buffer_Length = Source_Buffer_Width * Source_Buffer_Height;
-    
-    if(Packed_Write == true)
-    {
-        EPD_IT8951_WriteMuitiData(Source_Buffer, Source_Buffer_Length);
-    }
-    else
-    {
-        for(UDOUBLE i=0; i<Source_Buffer_Height; i++)
-        {
-            for(UDOUBLE j=0; j<Source_Buffer_Width; j++)
-            {
-                EPD_IT8951_WriteData(*Source_Buffer);
-                Source_Buffer++;
-            }
-        }
-    }
-
-    EPD_IT8951_LoadImgEnd();
+	EPD_IT8951_HostAreaPackedPixelWrite(1, Load_Img_Info, Area_Img_Info, Packed_Write);
 }
-
-
-
-
 
 /******************************************************************************
 function :	EPD_IT8951_HostAreaPackedPixelWrite_2bp
@@ -436,40 +412,8 @@ parameter:
 ******************************************************************************/
 static void EPD_IT8951_HostAreaPackedPixelWrite_2bp(IT8951_Load_Img_Info*Load_Img_Info, IT8951_Area_Img_Info*Area_Img_Info, bool Packed_Write)
 {
-    UWORD Source_Buffer_Width, Source_Buffer_Height;
-    UWORD Source_Buffer_Length;
-
-    UWORD* Source_Buffer = (UWORD*)Load_Img_Info->Source_Buffer_Addr;
-    EPD_IT8951_SetTargetMemoryAddr(Load_Img_Info->Target_Memory_Addr);
-    EPD_IT8951_LoadImgAreaStart(Load_Img_Info,Area_Img_Info);
-
-    //from byte to word
-    Source_Buffer_Width = (Area_Img_Info->Area_W*2/8)/2;
-    Source_Buffer_Height = Area_Img_Info->Area_H;
-    Source_Buffer_Length = Source_Buffer_Width * Source_Buffer_Height;
-
-    if(Packed_Write == true)
-    {
-        EPD_IT8951_WriteMuitiData(Source_Buffer, Source_Buffer_Length);
-    }
-    else
-    {
-        for(UDOUBLE i=0; i<Source_Buffer_Height; i++)
-        {
-            for(UDOUBLE j=0; j<Source_Buffer_Width; j++)
-            {
-                EPD_IT8951_WriteData(*Source_Buffer);
-                Source_Buffer++;
-            }
-        }
-    }
-
-    EPD_IT8951_LoadImgEnd();
+	EPD_IT8951_HostAreaPackedPixelWrite(2, Load_Img_Info, Area_Img_Info, Packed_Write);
 }
-
-
-
-
 
 /******************************************************************************
 function :	EPD_IT8951_HostAreaPackedPixelWrite_4bp
@@ -477,42 +421,8 @@ parameter:
 ******************************************************************************/
 static void EPD_IT8951_HostAreaPackedPixelWrite_4bp(IT8951_Load_Img_Info*Load_Img_Info, IT8951_Area_Img_Info*Area_Img_Info, bool Packed_Write)
 {
-    UWORD Source_Buffer_Width, Source_Buffer_Height;
-    UWORD Source_Buffer_Length;
-
-    UWORD* Source_Buffer = (UWORD*)Load_Img_Info->Source_Buffer_Addr;
-    EPD_IT8951_SetTargetMemoryAddr(Load_Img_Info->Target_Memory_Addr);
-    EPD_IT8951_LoadImgAreaStart(Load_Img_Info,Area_Img_Info);
-
-    //from byte to word
-    Source_Buffer_Width = (Area_Img_Info->Area_W*4/8)/2;
-    Source_Buffer_Height = Area_Img_Info->Area_H;
-    Source_Buffer_Length = Source_Buffer_Width * Source_Buffer_Height;
-
-    if(Packed_Write == true)
-    {
-        EPD_IT8951_WriteMuitiData(Source_Buffer, Source_Buffer_Length);
-    }
-    else
-    {
-        for(UDOUBLE i=0; i<Source_Buffer_Height; i++)
-        {
-            for(UDOUBLE j=0; j<Source_Buffer_Width; j++)
-            {
-                EPD_IT8951_WriteData(*Source_Buffer);
-                Source_Buffer++;
-            }
-        }
-    }
-
-    EPD_IT8951_LoadImgEnd();
+	EPD_IT8951_HostAreaPackedPixelWrite(4, Load_Img_Info, Area_Img_Info, Packed_Write);
 }
-
-
-
-
-
-
 
 /******************************************************************************
 function :	EPD_IT8951_HostAreaPackedPixelWrite_8bp
@@ -521,31 +431,8 @@ Precautions: Can't Packed Write
 ******************************************************************************/
 static void EPD_IT8951_HostAreaPackedPixelWrite_8bp(IT8951_Load_Img_Info*Load_Img_Info,IT8951_Area_Img_Info*Area_Img_Info)
 {
-    UWORD Source_Buffer_Width, Source_Buffer_Height;
-
-    UWORD* Source_Buffer = (UWORD*)Load_Img_Info->Source_Buffer_Addr;
-    EPD_IT8951_SetTargetMemoryAddr(Load_Img_Info->Target_Memory_Addr);
-    EPD_IT8951_LoadImgAreaStart(Load_Img_Info,Area_Img_Info);
-
-    //from byte to word
-    Source_Buffer_Width = (Area_Img_Info->Area_W*8/8)/2;
-    Source_Buffer_Height = Area_Img_Info->Area_H;
-
-    for(UDOUBLE i=0; i<Source_Buffer_Height; i++)
-    {
-        for(UDOUBLE j=0; j<Source_Buffer_Width; j++)
-        {
-            EPD_IT8951_WriteData(*Source_Buffer);
-            Source_Buffer++;
-        }
-    }
-    EPD_IT8951_LoadImgEnd();
+	EPD_IT8951_HostAreaPackedPixelWrite(8, Load_Img_Info, Area_Img_Info, Packed_Write);
 }
-
-
-
-
-
 
 /******************************************************************************
 function :	EPD_IT8951_Display_Area
@@ -562,8 +449,6 @@ static void EPD_IT8951_Display_Area(UWORD X,UWORD Y,UWORD W,UWORD H,UWORD Mode)
     //0x0034
     EPD_IT8951_WriteMultiArg(USDEF_I80_CMD_DPY_AREA, Args,5);
 }
-
-
 
 /******************************************************************************
 function :	EPD_IT8951_Display_AreaBuf
@@ -582,8 +467,6 @@ static void EPD_IT8951_Display_AreaBuf(UWORD X,UWORD Y,UWORD W,UWORD H,UWORD Mod
     //0x0037
     EPD_IT8951_WriteMultiArg(USDEF_I80_CMD_DPY_BUF_AREA, Args,7); 
 }
-
-
 
 /******************************************************************************
 function :	EPD_IT8951_Display_1bp
@@ -610,7 +493,6 @@ static void EPD_IT8951_Display_1bp(UWORD X, UWORD Y, UWORD W, UWORD H, UWORD Mod
     EPD_IT8951_WriteReg(UP1SR+2, EPD_IT8951_ReadReg(UP1SR+2) & ~(1<<2) );
 }
 
-
 /******************************************************************************
 function :	Enhanced driving capability
 parameter:  Enhanced driving capability for IT8951, in case the blurred display effect
@@ -626,9 +508,6 @@ void Enhance_Driving_Capability(void)
     Debug("The reg value after writing is %x\r\n", RegValue);
 }
 
-
-
-
 /******************************************************************************
 function :	Cmd1 SYS_RUN
 parameter:  Run the system
@@ -637,7 +516,6 @@ void EPD_IT8951_SystemRun(void)
 {
     EPD_IT8951_WriteCommand(IT8951_TCON_SYS_RUN);
 }
-
 
 /******************************************************************************
 function :	Cmd2 STANDBY
@@ -648,7 +526,6 @@ void EPD_IT8951_Standby(void)
     EPD_IT8951_WriteCommand(IT8951_TCON_STANDBY);
 }
 
-
 /******************************************************************************
 function :	Cmd3 SLEEP
 parameter:  Sleep
@@ -657,7 +534,6 @@ void EPD_IT8951_Sleep(void)
 {
     EPD_IT8951_WriteCommand(IT8951_TCON_SLEEP);
 }
-
 
 /******************************************************************************
 function :	EPD_IT8951_Init
@@ -684,7 +560,6 @@ IT8951_Dev_Info EPD_IT8951_Init(UWORD VCOM)
     }
     return Dev_Info;
 }
-
 
 /******************************************************************************
 function :	EPD_IT8951_Init_Fresh
@@ -721,7 +596,6 @@ void EPD_IT8951_Init_Refresh(IT8951_Dev_Info Dev_Info,UDOUBLE Target_Memory_Addr
     Frame_Buf = NULL;
 }
 
-
 /******************************************************************************
 function :	EPD_IT8951_1bp_Refresh
 parameter:
@@ -745,28 +619,11 @@ void EPD_IT8951_1bp_Refresh(UBYTE* Frame_Buf, UWORD X, UWORD Y, UWORD W, UWORD H
     Area_Img_Info.Area_W = W/8;
     Area_Img_Info.Area_H = H;
 
-
-    //clock_t start, finish;
-    //double duration;
-
-    //start = clock();
-
     EPD_IT8951_HostAreaPackedPixelWrite_1bp(&Load_Img_Info, &Area_Img_Info, Packed_Write);
-
-    //finish = clock();
-    //duration = (double)(finish - start) / CLOCKS_PER_SEC;
-	//Debug( "Write occupy %f second\n", duration );
-
-    //start = clock();
 
     EPD_IT8951_Display_1bp(X,Y,W,H,Mode,Target_Memory_Addr,0xF0,0x00);
 
-    //finish = clock();
-    //duration = (double)(finish - start) / CLOCKS_PER_SEC;
-	//Debug( "Show occupy %f second\n", duration );
 }
-
-
 
 /******************************************************************************
 function :	EPD_IT8951_1bp_Multi_Frame_Write
@@ -794,9 +651,6 @@ void EPD_IT8951_1bp_Multi_Frame_Write(UBYTE* Frame_Buf, UWORD X, UWORD Y, UWORD 
     EPD_IT8951_HostAreaPackedPixelWrite_1bp(&Load_Img_Info, &Area_Img_Info,Packed_Write);
 }
 
-
-
-
 /******************************************************************************
 function :	EPD_IT8951_1bp_Multi_Frame_Refresh
 parameter:  
@@ -808,14 +662,11 @@ void EPD_IT8951_1bp_Multi_Frame_Refresh(UWORD X, UWORD Y, UWORD W, UWORD H,UDOUB
     EPD_IT8951_Display_1bp(X,Y,W,H, A2_Mode,Target_Memory_Addr,0xF0,0x00);
 }
 
-
-
-
 /******************************************************************************
-function :	EPD_IT8951_2bp_Refresh
+function :	EPD_IT8951_Refresh
 parameter:  
 ******************************************************************************/
-void EPD_IT8951_2bp_Refresh(UBYTE* Frame_Buf, UWORD X, UWORD Y, UWORD W, UWORD H, bool Hold, UDOUBLE Target_Memory_Addr, bool Packed_Write)
+void EPD_IT8951_Refresh(UBYTE bpp, UBYTE* Frame_Buf, UWORD X, UWORD Y, UWORD W, UWORD H, bool Hold, UDOUBLE Target_Memory_Addr, bool Packed_Write)
 {
     IT8951_Load_Img_Info Load_Img_Info;
     IT8951_Area_Img_Info Area_Img_Info;
@@ -824,7 +675,7 @@ void EPD_IT8951_2bp_Refresh(UBYTE* Frame_Buf, UWORD X, UWORD Y, UWORD W, UWORD H
 
     Load_Img_Info.Source_Buffer_Addr = (UDOUBLE)Frame_Buf;
     Load_Img_Info.Endian_Type = IT8951_LDIMG_L_ENDIAN;
-    Load_Img_Info.Pixel_Format = IT8951_2BPP;
+    Load_Img_Info.Pixel_Format = bpp;
     Load_Img_Info.Rotate =  IT8951_ROTATE_0;
     Load_Img_Info.Target_Memory_Addr = Target_Memory_Addr;
 
@@ -832,6 +683,22 @@ void EPD_IT8951_2bp_Refresh(UBYTE* Frame_Buf, UWORD X, UWORD Y, UWORD W, UWORD H
     Area_Img_Info.Area_Y = Y;
     Area_Img_Info.Area_W = W;
     Area_Img_Info.Area_H = H;
+	UBYTE bp;
+	switch(bpp)
+	{
+	case IT8951_2BPP:
+		bp = 2;
+		break;
+	case IT8951_3BPP:
+		bp = 2;
+		break;
+	case IT8951_4BPP:
+		bp = 4;
+		break;
+	case IT8951_8BPP:
+		bp = 8;
+		break;
+	}
 
     EPD_IT8951_HostAreaPackedPixelWrite_2bp(&Load_Img_Info, &Area_Img_Info,Packed_Write);
 
@@ -845,8 +712,14 @@ void EPD_IT8951_2bp_Refresh(UBYTE* Frame_Buf, UWORD X, UWORD Y, UWORD W, UWORD H
     }
 }
 
-
-
+/******************************************************************************
+function :	EPD_IT8951_2bp_Refresh
+parameter:  
+******************************************************************************/
+void EPD_IT8951_2bp_Refresh(UBYTE* Frame_Buf, UWORD X, UWORD Y, UWORD W, UWORD H, bool Hold, UDOUBLE Target_Memory_Addr, bool Packed_Write)
+{
+	EPD_IT8951_Refresh(IT8951_2BPP, Frame_Buf, X, Y, W, H, Hold, Target_Memory_Addr, Packed_Write);
+}
 
 /******************************************************************************
 function :	EPD_IT8951_4bp_Refresh
@@ -854,34 +727,8 @@ parameter:
 ******************************************************************************/
 void EPD_IT8951_4bp_Refresh(UBYTE* Frame_Buf, UWORD X, UWORD Y, UWORD W, UWORD H, bool Hold, UDOUBLE Target_Memory_Addr, bool Packed_Write)
 {
-    IT8951_Load_Img_Info Load_Img_Info;
-    IT8951_Area_Img_Info Area_Img_Info;
-
-    EPD_IT8951_WaitForDisplayReady();
-
-    Load_Img_Info.Source_Buffer_Addr = (UDOUBLE)Frame_Buf;
-    Load_Img_Info.Endian_Type = IT8951_LDIMG_L_ENDIAN;
-    Load_Img_Info.Pixel_Format = IT8951_4BPP;
-    Load_Img_Info.Rotate =  IT8951_ROTATE_0;
-    Load_Img_Info.Target_Memory_Addr = Target_Memory_Addr;
-
-    Area_Img_Info.Area_X = X;
-    Area_Img_Info.Area_Y = Y;
-    Area_Img_Info.Area_W = W;
-    Area_Img_Info.Area_H = H;
-
-    EPD_IT8951_HostAreaPackedPixelWrite_4bp(&Load_Img_Info, &Area_Img_Info, Packed_Write);
-
-    if(Hold == true)
-    {
-        EPD_IT8951_Display_Area(X,Y,W,H, GC16_Mode);
-    }
-    else
-    {
-        EPD_IT8951_Display_AreaBuf(X,Y,W,H, GC16_Mode,Target_Memory_Addr);
-    }
+	EPD_IT8951_Refresh(IT8951_4BPP, Frame_Buf, X, Y, W, H, Hold, Target_Memory_Addr, Packed_Write);
 }
-
 
 /******************************************************************************
 function :	EPD_IT8951_8bp_Refresh
@@ -889,30 +736,5 @@ parameter:
 ******************************************************************************/
 void EPD_IT8951_8bp_Refresh(UBYTE *Frame_Buf, UWORD X, UWORD Y, UWORD W, UWORD H, bool Hold, UDOUBLE Target_Memory_Addr)
 {
-    IT8951_Load_Img_Info Load_Img_Info;
-    IT8951_Area_Img_Info Area_Img_Info;
-
-    EPD_IT8951_WaitForDisplayReady();
-
-    Load_Img_Info.Source_Buffer_Addr = (UDOUBLE)Frame_Buf;
-    Load_Img_Info.Endian_Type = IT8951_LDIMG_L_ENDIAN;
-    Load_Img_Info.Pixel_Format = IT8951_8BPP;
-    Load_Img_Info.Rotate =  IT8951_ROTATE_0;
-    Load_Img_Info.Target_Memory_Addr = Target_Memory_Addr;
-
-    Area_Img_Info.Area_X = X;
-    Area_Img_Info.Area_Y = Y;
-    Area_Img_Info.Area_W = W;
-    Area_Img_Info.Area_H = H;
-
-    EPD_IT8951_HostAreaPackedPixelWrite_8bp(&Load_Img_Info, &Area_Img_Info);
-
-    if(Hold == true)
-    {
-        EPD_IT8951_Display_Area(X, Y, W, H, GC16_Mode);
-    }
-    else
-    {
-        EPD_IT8951_Display_AreaBuf(X, Y, W, H, GC16_Mode, Target_Memory_Addr);
-    }
+	EPD_IT8951_Refresh(IT8951_8BPP, Frame_Buf, X, Y, W, H, Hold, Target_Memory_Addr, Packed_Write);
 }
